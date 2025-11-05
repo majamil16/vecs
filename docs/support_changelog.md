@@ -31,6 +31,13 @@
 
 - Bugfix: removed errant print statement
 
-## master
+## 0.4.2
 
 - Feature: Parameterized IVFFlat and HNSW indexes
+- Feature: Delete using metadata filter
+
+## 0.4.3
+
+- Feature: Metadata filtering with `$contains`
+
+## main

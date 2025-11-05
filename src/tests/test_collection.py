@@ -244,6 +244,18 @@ def test_query(client: vecs.Client) -> None:
     assert res[0][0] == "vec5"
     assert res[0][1] == query_meta
 
+    # include_vector
+    res = bar.query(
+        data=query_vec,
+        limit=top_k,
+        filters=None,
+        measure="cosine_distance",
+        include_vector=True,
+    )
+    assert len(res[0]) == 2
+    assert res[0][0] == "vec5"
+    assert all(res[0][1] == query_vec)
+
     # test for different numbers of probes
     assert len(bar.query(data=query_vec, limit=top_k, probes=10)) == top_k
 
@@ -577,6 +589,61 @@ def test_filters_in(client: vecs.Client) -> None:
         )
 
 
+def test_filters_contains(client: vecs.Client) -> None:
+    bar = client.get_or_create_collection(name="bar", dimension=4)
+
+    records = [
+        ("0", [0, 0, 0, 0], {"a": 1, "b": 2}),
+        ("1", [1, 0, 0, 0], {"a": [1, 2, 3]}),
+        ("2", [1, 1, 0, 0], {"a": {"1": "2", "x": "y"}}),
+        ("3", [0, 0, 0, 0], {"a": ["1"]}),
+        ("4", [1, 0, 0, 0], {"a": [4, 3, 2, 1]}),
+        ("5", [1, 0, 0, 0], {"a": [2]}),
+    ]
+
+    bar.upsert(records)
+    bar.create_index()
+
+    # Test $contains operator for int value
+    assert bar.query(
+        data=[0, 0, 0, 0],
+        limit=3,
+        filters={"a": {"$contains": 1}},
+    ) == ["1", "4"]
+
+    # Test $contains operator for string value. Strings treated differently than ints
+    assert bar.query(
+        data=[0, 0, 0, 0],
+        limit=3,
+        filters={"a": {"$contains": "1"}},
+    ) == ["3"]
+
+    # Test $contains operator for non-existent value
+    assert (
+        bar.query(
+            data=[0, 0, 0, 0],
+            limit=3,
+            filters={"a": {"$contains": 5}},
+        )
+        == []
+    )
+
+    # Test $contains requires a scalar value
+    with pytest.raises(vecs.exc.FilterError):
+        bar.query(
+            data=[1, 0, 0, 0],
+            limit=3,
+            filters={"a": {"$contains": [1, 2, 3]}},
+        )
+
+    with pytest.raises(vecs.exc.FilterError):
+        bar.query(
+            data=[1, 0, 0, 0],
+            limit=3,
+            filters={"a": {"$contains": {"a": 1}}},
+        )
+
+
 def test_access_index(client: vecs.Client) -> None:
     dim = 4
     bar = client.get_or_create_collection(name="bar", dimension=dim)
@@ -747,6 +814,19 @@ def test_l2_index_query(client: vecs.Client) -> None:
         data=[1, 2, 3, 4],
         limit=1,
         measure="l2_distance",
+    )
+    assert len(results) == 1
+
+
+def test_l1_index_query(client: vecs.Client) -> None:
+    dim = 4
+    bar = client.get_or_create_collection(name="bar", dimension=dim)
+    bar.upsert([("a", [1, 2, 3, 4], {})])
+    bar.create_index(measure=vecs.IndexMeasure.l1_distance)
+    results = bar.query(
+        data=[1, 2, 3, 4],
+        limit=1,
+        measure="l1_distance",
     )
     assert len(results) == 1
 

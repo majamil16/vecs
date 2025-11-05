@@ -18,7 +18,7 @@
 
 ---
 
-**Documentation**: <a href="https://supabase.github.io/vecs/latest/" target="_blank">https://supabase.github.io/vecs/latest/</a>
+**Documentation**: <a href="https://supabase.github.io/vecs/" target="_blank">https://supabase.github.io/vecs/</a>
 
 **Source Code**: <a href="https://github.com/supabase/vecs" target="_blank">https://github.com/supabase/vecs</a>
 
@@ -30,7 +30,7 @@ Vecs is a Python client library for managing and querying vector stores in Postg
 ## Overview
 
 - Vector Management: create collections to persist and update vectors in a PostgreSQL database.
-- Querying: Query vectors efficiently using measures such as cosine distance, l2 distance, or max inner product.
+- Querying: Query vectors efficiently using measures such as cosine distance, l2 distance, l1 distance, or max inner product.
 - Metadata: Each vector can have associated metadata, which can also be used as filters during queries.
 - Hybrid Data: vecs creates its own schema and can coexist with your existing relational data
 

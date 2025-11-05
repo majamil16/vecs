@@ -89,6 +89,7 @@ Available options for distance `measure` are:
 
 - `vecs.IndexMeasure.cosine_distance`
 - `vecs.IndexMeasure.l2_distance`
+- `vecs.IndexMeasure.l1_distance`
 - `vecs.IndexMeasure.max_inner_product`
 
 which correspond to different methods for comparing query vectors to the vectors in the database.
@@ -115,7 +116,7 @@ To manually specify `method`, `measure`, and `index_arguments` add them as argum
 docs.create_index(
     method=IndexMethod.hnsw,
     measure=IndexMeasure.cosine_distance,
-    measure=IndexArgsHNSW(m=8),
+    index_arguments=IndexArgsHNSW(m=8),
 )
 ```
 
@@ -151,6 +152,7 @@ docs.query(
     measure="cosine_distance",   # distance measure to use
     include_value=False,         # should distance measure values be returned?
     include_metadata=False,      # should record metadata be returned?
+    include_vector=False,        # should vectors be returned?
 )
 ```
 

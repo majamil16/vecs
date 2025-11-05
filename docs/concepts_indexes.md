@@ -10,7 +10,7 @@ query does not have a covering index for cosine_similarity. See Collection.creat
 
 As each query vector must be checked against every record in the collection. When the number of dimensions and/or number of records becomes large, that becomes extremely slow and computationally expensive.
 
-An index is a heuristic datastructure that pre-computes distances among key points in the vector space. It is smaller and can be traversed more quickly than the whole collection enabling __much__ more performant seraching.
+An index is a heuristic data structure that pre-computes distances between key points in the vector space. It is smaller and can be traversed more quickly than the whole collection enabling much more performant searching.
 
 Only one index may exist per-collection. An index optimizes a collection for searching according to a selected distance measure.
 
@@ -26,6 +26,7 @@ Available options for distance `measure` are:
 
 - `vecs.IndexMeasure.cosine_distance`
 - `vecs.IndexMeasure.l2_distance`
+- `vecs.IndexMeasure.l1_distance`
 - `vecs.IndexMeasure.max_inner_product`
 
 which correspond to different methods for comparing query vectors to the vectors in the database.
@@ -52,7 +53,7 @@ To manually specify `method`, `measure`, and `index_arguments` add them as argum
 docs.create_index(
     method=IndexMethod.hnsw,
     measure=IndexMeasure.cosine_distance,
-    measure=IndexArgsHNSW(m=8),
+    index_arguments=IndexArgsHNSW(m=8),
 )
 ```
 

@@ -4,6 +4,7 @@ Defines the 'Collection' class
 Importing from the `vecs.collection` directly is not supported.
 All public classes, enums, and functions are re-exported by the top level `vecs` module.
 """
+
 from __future__ import annotations
 
 import math
@@ -81,6 +82,7 @@ class IndexMeasure(str, Enum):
     cosine_distance = "cosine_distance"
     l2_distance = "l2_distance"
     max_inner_product = "max_inner_product"
+    l1_distance = "l1_distance"
 
 
 @dataclass
@@ -123,12 +125,14 @@ INDEX_MEASURE_TO_OPS = {
     IndexMeasure.cosine_distance: "vector_cosine_ops",
     IndexMeasure.l2_distance: "vector_l2_ops",
     IndexMeasure.max_inner_product: "vector_ip_ops",
+    IndexMeasure.l1_distance: "vector_l1_ops",
 }
 
 INDEX_MEASURE_TO_SQLA_ACC = {
     IndexMeasure.cosine_distance: lambda x: x.cosine_distance,
     IndexMeasure.l2_distance: lambda x: x.l2_distance,
     IndexMeasure.max_inner_product: lambda x: x.max_inner_product,
+    IndexMeasure.l1_distance: lambda x: x.l1_distance,
 }
 
 
@@ -463,6 +467,7 @@ class Collection:
         measure: Union[IndexMeasure, str] = IndexMeasure.cosine_distance,
         include_value: bool = False,
         include_metadata: bool = False,
+        include_vector: bool = False,
         *,
         probes: Optional[int] = None,
         ef_search: Optional[int] = None,
@@ -543,6 +548,9 @@ class Collection:
 
         if include_value:
             cols.append(distance_clause)
+
+        if include_vector:
+            cols.append(self.table.c.vec)
 
         if include_metadata:
             cols.append(self.table.c.metadata)
@@ -650,17 +658,22 @@ class Collection:
             query = text(
                 f"""
             select
-                relname as table_name
+                pi.relname as index_name
             from
-                pg_class pc
+                pg_class pi                -- index info
+                join pg_index i            -- extend index info
+                  on pi.oid = i.indexrelid
+                join pg_class pt           -- owning table info
+                  on pt.oid = i.indrelid
             where
                 pc.relnamespace = '{self.schema}'::regnamespace
                 and relname ilike 'ix_vector%'
                 and pc.relkind = 'i'
+                and pt.relname = :table_name
             """
             )
             with self.client.Session() as sess:
-                ix_name = sess.execute(query).scalar()
+                ix_name = sess.execute(query, {"table_name": self.name}).scalar()
             self._index = ix_name
         return self._index
 
@@ -874,7 +887,16 @@ def build_filters(json_col: Column, filters: Dict):
             if len(value) > 1:
                 raise FilterError("only one operator permitted")
             for operator, clause in value.items():
-                if operator not in ("$eq", "$ne", "$lt", "$lte", "$gt", "$gte", "$in"):
+                if operator not in (
+                    "$eq",
+                    "$ne",
+                    "$lt",
+                    "$lte",
+                    "$gt",
+                    "$gte",
+                    "$in",
+                    "$contains",
+                ):
                     raise FilterError("unknown operator")
 
                 # equality of singular values can take advantage of the metadata index
@@ -891,7 +913,7 @@ def build_filters(json_col: Column, filters: Dict):
                     for elem in clause:
                         if not isinstance(elem, (int, str, float)):
                             raise FilterError(
-                                "argument to $in filter must be a list or scalars"
+                                "argument to $in filter must be a list of scalars"
                             )
 
                     # cast the array of scalars to a postgres array of jsonb so we can
@@ -900,6 +922,30 @@ def build_filters(json_col: Column, filters: Dict):
                     return json_col.op("->")(key).in_(contains_value)
 
                 matches_value = cast(clause, postgresql.JSONB)
+
+                # @> in Postgres is heavily overloaded.
+                # By default, it will return True for
+                #
+                # scalar in array
+                #   '[1, 2, 3]'::jsonb @> '1'::jsonb -- true#
+                # equality:
+                #   '1'::jsonb @> '1'::jsonb -- true
+                # key value pair in object
+                #   '{"a": 1, "b": 2}'::jsonb @> '{"a": 1}'::jsonb -- true
+                #
+                # At this time we only want to allow "scalar in array" so
+                # we assert that the clause is a scalar and the target metadata
+                # is an array
+                if operator == "$contains":
+                    if not isinstance(clause, (int, str, float)):
+                        raise FilterError(
+                            "argument to $contains filter must be a scalar"
+                        )
+
+                    return and_(
+                        json_col.op("->")(key).contains(matches_value),
+                        func.jsonb_typeof(json_col.op("->")(key)) == "array",
+                    )
 
                 # handles non-singular values
                 if operator == "$eq":
